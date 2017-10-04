@@ -1596,14 +1596,13 @@ namespace Microsoft.AspNetCore.Mvc.Internal
             }
 
             var httpContext = new DefaultHttpContext();
-            var options = new MvcOptions();
-            var mvcOptionsAccessor = new TestOptionsManager<MvcOptions>(options);
+            var options = new TestOptionsManager<MvcOptions>(new MvcOptions());
 
             var services = new ServiceCollection();
             services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
-            services.AddSingleton<IOptions<MvcOptions>>(mvcOptionsAccessor);
+            services.AddSingleton<IOptions<MvcOptions>>(options);
             services.AddSingleton<IActionResultExecutor<ObjectResult>>(new ObjectResultExecutor(
-                mvcOptionsAccessor,
+                new DefaultOutputFormatterSelector(NullLoggerFactory.Instance, options),
                 new TestHttpResponseStreamWriterFactory(),
                 NullLoggerFactory.Instance));
 
@@ -1622,7 +1621,7 @@ namespace Microsoft.AspNetCore.Mvc.Internal
                     await c.HttpContext.Response.WriteAsync(c.Object.ToString());
                 });
 
-            options.OutputFormatters.Add(formatter.Object);
+            options.Value.OutputFormatters.Add(formatter.Object);
 
             var diagnosticSource = new DiagnosticListener("Microsoft.AspNetCore");
             if (diagnosticListener != null)
