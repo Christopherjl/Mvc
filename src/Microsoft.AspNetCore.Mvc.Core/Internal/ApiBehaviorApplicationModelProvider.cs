@@ -2,8 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.Mvc.Core;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
@@ -71,6 +73,33 @@ namespace Microsoft.AspNetCore.Mvc.Internal
                     AddInvalidModelStateFilter(actionModel);
 
                     InferParameterBindingSources(actionModel);
+
+                    AddMultipartFormDataConsumesAttribute(actionModel);
+                }
+            }
+        }
+
+        // Internal for unit testing
+        internal void AddMultipartFormDataConsumesAttribute(ActionModel actionModel)
+        {
+            if (_apiBehaviorOptions.SuppressAddingConsumesConstraintForFormParameters)
+            {
+                return;
+            }
+
+            // Add a ConsumesAttribute if the request does not explicitly specify one.
+            if (actionModel.Filters.OfType<IConsumesActionConstraint>().Any())
+            {
+                return;
+            }
+
+            foreach (var parameter in actionModel.Parameters)
+            {
+                var bindingSource = parameter.BindingInfo?.BindingSource;
+                if (bindingSource == BindingSource.FormFile)
+                {
+                    // If an action accepts files, it must accept multipart/form-data.
+                    actionModel.Filters.Add(new ConsumesAttribute("multipart/form-data"));
                 }
             }
         }
@@ -145,9 +174,16 @@ namespace Microsoft.AspNetCore.Mvc.Internal
         // Internal for unit testing.
         internal BindingSource InferBindingSourceForParameter(ParameterModel parameter)
         {
+            var parameterType = parameter.ParameterInfo.ParameterType;
             if (ParameterExistsInAllRoutes(parameter.Action, parameter.ParameterName))
             {
                 return BindingSource.Path;
+            }
+            else if (parameterType == typeof(IFormFile) ||
+                parameterType == typeof(IFormFileCollection) ||
+                typeof(IEnumerable<IFormFile>).IsAssignableFrom(parameterType))
+            {
+                return BindingSource.FormFile;
             }
             else
             {
